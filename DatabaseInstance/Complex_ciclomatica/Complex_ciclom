@@ -1,0 +1,556 @@
+DatabaseInstance
+Complexida Ciclomática 43
+glpi/DatabaseInstance.php
+--------------------------
+
+<?php
+/**
+* ------------------------------------------------- --------------------
+*
+* GLPI - Gestionnaire Libre de Parc Informatique
+*
+* http://glpi-project.org
+*
+* @copyright 2015-2024 Teclib' e colaboradores.
+* @copyright 2003-2014 pela Equipe de Desenvolvimento do INDEPNET.
+* @licence https://www.gnu.org/licenses/gpl-3.0.html
+*
+* ------------------------------------------------- --------------------
+*
+* LICENÇA
+*
+* Este arquivo faz parte do GLPI.
+*
+* Este programa é um software livre: você pode redistribuí-lo e/ou modificá-lo
+* sob os termos da Licença Pública Geral GNU conforme publicada por
+* a Free Software Foundation, seja a versão 3 da Licença, ou
+* (a seu critério) qualquer versão posterior.
+*
+* Este programa é distribuído na esperança de que seja útil,
+* mas SEM NENHUMA GARANTIA; sem mesmo a garantia implícita de
+* COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja o
+* GNU General Public License para mais detalhes.
+*
+* Você deve ter recebido uma cópia da GNU General Public License
+* junto com este programa. Se não, veja <https://www.gnu.org/licenses/>.
+*
+* ------------------------------------------------- --------------------
+*/
+aula Instância de banco de dados estendeCommonDBTM
+{
+    usarGlpi\Recursos\Clonável;
+    usarGlpi\Recursos\Inventariante;
+   // De CommonDBTM
+    público $dohistory                   = verdadeiro;
+    público estático $nomecerto            ='banco de dados';
+    protegido $usenotepad               = verdadeiro;
+    protegido estático $encaminhar_entidade_para= ['Banco de dados'];
+    público função obterCloneRelations():variedade
+    {
+        retornar[
+            Item_do_aparelho::aula,
+            Item_do_Contrato::aula,
+            Item_Documento::aula,
+            Infocom::aula,
+            Bloco de notas::aula,
+            Item_do_item_da_base_de_conhecimento::aula,
+            Item_do_Certificado::aula,
+            Item_de_domínio::aula,
+            Banco de dados::aula
+        ];
+    }
+    público função useDeletedToLockIfDynamic()
+    {
+        retornarfalso;
+    }
+    público estático função obterNomeDoTipo($nb=0)
+    {
+        retornar_n('Instância de banco de dados','Instâncias de banco de dados',$nb);
+    }
+    público função defineTabs($opções= [])
+    {
+        $longo= [];
+        $isso->addDefaultFormTab($longo)
+         ->addImpactTab($longo,$opções)
+         ->addStandardTab('Instância de banco de dados',$longo,$opções)
+         ->addStandardTab('Banco de dados',$longo,$opções)
+         ->addStandardTab('Infocomunicação',$longo,$opções)
+         ->addStandardTab('Item_do_Contrato',$longo,$opções)
+         ->addStandardTab('Item_Documento',$longo,$opções)
+         ->addStandardTab('Item_do_item_da_base_de_conhecimento',$longo,$opções)
+         ->addStandardTab('Bilhete',$longo,$opções)
+         ->addStandardTab('Item_Problema',$longo,$opções)
+         ->addStandardTab('Alterar_Item',$longo,$opções)
+         ->addStandardTab('Item_de_certificado',$longo,$opções)
+         ->addStandardTab('Trancar',$longo,$opções)
+         ->addStandardTab('Bloco de notas',$longo,$opções)
+         ->addStandardTab('Item_de_Domínio',$longo,$opções)
+         ->addStandardTab('Item_do_Aparelho',$longo,$opções)
+         ->addStandardTab('Registro',$longo,$opções);
+        retornar $longo;
+    }
+    público função obter bancos de dados():variedade
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+        $dbs= [];
+        $iterador=$DB->solicitação([
+            'DE'=> Banco de Dados::getTable(),
+            'ONDE'=> [
+                'id_instâncias_do_banco_de_dados'=>$isso->campos['eu ia'],
+                'está_apagado'=>0
+            ]
+        ]);
+        para cada($iterador como $linha) {
+            $dbs[$linha['eu ia']] =$linha;
+        }
+        retornar $dbs;
+    }
+    público função mostrarFormulário($ID,variedade $opções= [])
+    {
+        /** @var array $CFG_GLPI */
+        global $CFG_GLPI;
+        $rand= mt_rand();
+        $isso->initForm($ID,$opções);
+        $isso->showFormHeader($opções);
+        eco "<tr class='tab_bg_1'>";
+        eco "<td><rótulo para='dropdown_itemtype$rand'>". __('Tipo de item') ."</label></td>";
+        $tipo de item=$isso->campos['tipo de item'];
+        eco "<td>";
+        $rand= Menu suspenso::showItemTypes(
+            'tipo de item',
+            $CFG_GLPI['tipos_de_instância_de_banco_de_dados'],
+            [
+                'valor'=>$tipo de item,
+                'rand'  =>$rand
+            ]
+        );
+        eco "</td>";
+        eco "<td><rótulo para='dropdown_items_id$rand'>". _n('Item','Unid',1) ."</label></td>";
+        eco "<td>";
+        se($tipo de item) {
+            $p= [
+                'tipo de item'=>'__VALOR__',
+                'dom_rand'=>$rand,
+                'nome_dom'=>"itens_id",
+                'Ação'=>'obter_itens_do_tipo_de_item'
+            ];
+            Ajax::updateItemOnSelectEvent(
+                "tipo_de_item_suspenso$rand",
+                "itens_id$rand",
+                $CFG_GLPI["doc_raiz"] ."/ajax/dropdownAllItems.php",
+                $p
+            );
+            $tipo de item::suspenso([
+                'nome'=>'itens_id',
+                'valor'=>$isso->campos['itens_id'],
+                'exibir_escolha_vazia'=> verdadeiro,
+                'rand'=>$rand
+            ]);
+        }outro{
+            $p= ['tabela de identificação'            =>'__VALOR__',
+                'rand'                  =>$rand,
+                'nome'                  =>"itens_id",
+                'largura'                 =>'não definido'
+            ];
+            Ajax::updateItemOnSelectEvent(
+                "tipo_de_item_suspenso$rand",
+                "resultados_tipo_de_item$rand",
+                $CFG_GLPI["doc_raiz"] ."/ajax/dropdownAllItems.php",
+                $p
+            );
+            eco "<span id='resultados_itemtype$rand'></span>";
+        }
+        eco "</td></tr>\n";
+        eco "<td><rótulo para='nome_do_campo_de_texto$rand'>". __('Nome') ."</label></td>";
+        eco "<td>";
+        ecoHtml::entrada(
+            'nome',
+            [
+                'valor'=>$isso->campos['nome'],
+                'eu ia'    =>"nome_do_campo_de_texto$rand",
+            ]
+        );
+        eco "</td>";
+        eco "<td><rótulo para='dropdown_states_id$rand'>". __('Status') ."</label></td>";
+        eco "<td>";
+        Estado::suspenso([
+            'valor'     =>$isso->campos["estados_id"],
+            'entidade'    =>$isso->campos["id_entidades"],
+            'doença'=> ['is_visible_databaseinstance'=>1],
+            'rand'      =>$rand
+        ]);
+        eco "</td></tr>\n";
+        eco "<tr class='tab_bg_1'>";
+        eco "<td><rótulo para='dropdown_locations_id$rand'>". Localização::obterNomeDoTipo(1) ."</label></td>";
+        eco "<td>";
+        Localização::suspenso(['valor'  =>$isso->campos["id_de_localização"],
+            'entidade'=>$isso->campos["id_entidades"],
+            'rand'=>$rand
+        ]);
+        eco "</td>";
+        eco "<td><rótulo para='dropdown_databaseinstancetypes_id$rand'>". DatabaseInstanceType::getFieldLabel() ."</label></td>";
+        eco "<td>";
+        Tipo de instância do banco de dados::dropdown(['valor'=>$isso->campos["id_tipos_de_instância_do_banco_de_dados"],'rand'=>$rand]);
+        eco "</td></tr>\n";
+        eco "<tr class='tab_bg_1'>";
+        eco "<td><rótulo para='versão$rand'>". _n('Versão','Versões',1) ."</label></td>";
+        eco "<td>";
+        ecoHtml::entrada(
+            'versão',
+            [
+                'eu ia'=>'versão'.$rand,
+                'valor'=>$isso->campos['versão']
+            ]
+        );
+        eco "</td>";
+        eco "<td><rótulo para='dropdown_databaseinstancecategories_id$rand'>". Categoria de instância do banco de dados::obterNomeDoTipo(1) ."</label></td>";
+        eco "<td>";
+        Categoria de instância do banco de dados::dropdown(['valor'=>$isso->campos["id_categorias_de_instancia_do_banco_de_dados"],'rand'=>$rand]);
+        eco "</td></tr>\n";
+        eco "<tr class='tab_bg_1'>";
+        eco "<td><rótulo para='está_ativo$rand'>". __('Está ativo') ."</label></td>";
+        eco "<td>";
+        Menu suspenso::mostrarSimNão('está_ativo',$isso->campos['está_ativo']);
+        eco "<td>". __('Associado a um bilhete') ."</td><td>";
+        Menu suspenso::mostrarSimNão('is_helpdesk_visible',$isso->campos['is_helpdesk_visible']);
+        eco "</td></tr>\n";
+        eco "<tr class='tab_bg_1'>";
+        eco "<td><rótulo para='dropdown_groups_id_tech$rand'>". __('Grupo responsável') ."</label></td>";
+        eco "<td>";
+        Grupo::suspenso([
+            'nome'      =>'grupos_id_tech',
+            'valor'     =>$isso->campos['grupos_id_tech'],
+            'entidade'    =>$isso->campos['id_entidades'],
+            'doença'=> ['é_atribuir'=>1],
+            'rand'=>$rand
+        ]);
+        eco "</td>";
+        $linha        =3;
+        eco "<td linhaspan='$linha'><rótulo para='comentário'>". __('Comentários') ."</label></td>";
+        eco "<td linhaspan='$linha' classe='meio'>";
+        eco "<textarea class='form-control' id='comment' name='comment' >".
+         $isso->campos["comentário"];
+        eco "</textarea></td></tr>";
+        eco "<tr class='tab_bg_1'>";
+        eco "<td><rótulo para='dropdown_users_id_tech$rand'>". __('Técnico responsável') ."</label></td>";
+        eco "<td>";
+        Usuário::suspenso(['nome'   =>'usuários_id_tech',
+            'valor'  =>$isso->campos["id_usuários_tecnologia"],
+            'certo'  =>'próprio_bilhete',
+            'entidade'=>$isso->campos["id_entidades"],
+            'rand'   =>$rand
+        ]);
+        eco "</td></tr>";
+        eco "<tr><td><rótulo para='dropdown_manufacturers_id$rand'>". Fabricante::obterNomeDoTipo(1) ."</label></td>";
+        eco "<td>";
+        Fabricante::dropdown(['valor'=>$isso->campos["id_do_fabricante"],'rand'=>$rand]);
+        eco "</td></tr>\n";
+        eco "<tr class='tab_bg_1'>";
+        eco "<td><rótulo para='is_onbackup$rand'>". __('Tem backup') ."</label></td>";
+        eco "<td>";
+        Menu suspenso::mostrarSimNão('está_em_backup',$isso->campos['está_em_backup']);
+        eco "</td>";
+        eco "<td><rótulo para='data_últimobackup$rand'>". __('Última data de backup') ."</label></td>";
+        eco "<td>";
+        Html::showDateTimeField(
+            "data_últimobackup",
+            [
+                'valor'      =>$isso->campos['data_últimobackup'],
+                'talvez vazio'=> verdadeiro
+            ]
+        );
+        eco "</td></tr>\n";
+        eco "<tr class='tab_bg_1'>";
+        eco "<td><rótulo para='porta$rand'>". _n('Porta','Portos',1) ."</label></td>";
+        eco "<td>";
+        ecoHtml::entrada('porta', [
+            'valor'=>$isso->campos['porta'],
+            'eu ia'    =>"porta$rand"
+        ]);
+        eco "</td>";
+        eco "<td><rótulo para='caminho$rand'>". __('Caminho') ."</label></td>";
+        eco "<td>";
+        ecoHtml::entrada('caminho', [
+            'valor'=>$isso->campos['caminho'],
+            'eu ia'    =>"caminho$rand"
+        ]);
+        eco "</td></tr>\n";
+        $isso->showInventoryInfo();
+        $isso->mostrarBotõesDeFormulário($opções);
+        retornarverdadeiro;
+    }
+    público função prepararEntradaParaAdicionar($entrada)
+    {
+        se(conjunto($entrada['data_últimobackup']) &&vazio($entrada['data_últimobackup'])) {
+            não definido($entrada['data_últimobackup']);
+        }
+        se(conjunto($entrada['tamanho']) &&vazio($entrada['tamanho'])) {
+            não definido($entrada['tamanho']);
+        }
+        retornar $entrada;
+    }
+    público função rawSearchOpções()
+    {
+        $tab= pai::rawSearchOpções();
+        $tab[] = [
+            'eu ia'                 =>'2',
+            'mesa'              =>$isso->obterTabela(),
+            'campo'              =>'eu ia',
+            'nome'               => __('EU IA'),
+            'ação massiva'      => falso,// campo implícito é id
+            'tipo de dados'           =>'número'
+        ];
+        $tab= mesclagem_de_array($tab, Localização::rawSearchOptionsToAdd());
+        $tab[] = [
+            'eu ia'                 =>'4',
+            'mesa'              => Tipo de instância de banco de dados::getTable(),
+            'campo'              =>'nome',
+            'nome'               => _n('Tipo','Tipos',1),
+            'tipo de dados'           =>'suspenso'
+        ];
+        $tab[] = [
+            'eu ia'                 =>'168',
+            'mesa'              => self::obterTabela(),
+            'campo'              =>'porta',
+            'nome'               => _n('Porta','Portos',1),
+            'forçar grupo por'       => verdadeiro,
+            'ação massiva'      => falso,
+            'tipo de dados'           =>'inteiro',
+            'juntar parâmetros'         => [
+                'tipo de junção'           =>'criança'
+            ]
+        ];
+        $tab[] = [
+            'eu ia'               =>'5',
+            'mesa'            =>Instância de banco de dados::obterTabela(),
+            'campo'            =>'itens_id',
+            'nome'             => _n('Item associado','Itens associados',2),
+            'sem busca'         => verdadeiro,
+            'ação massiva'    => falso,
+            'forçar grupo por'     => verdadeiro,
+            'tipo de dados'         =>'específico',
+            'tipo de pesquisa'       =>'é igual a',
+            'campos adicionais'=> ['tipo de item'],
+            'juntar parâmetros'       => ['tipo de junção'=>'criança']
+        ];
+        $tab[] = [
+            'eu ia'                 =>'6',
+            'mesa'              =>Instância de banco de dados::obterTabela(),
+            'campo'              =>'versão',
+            'nome'               => _n('Versão','Versões',1),
+            'tipo de dados'           =>'texto'
+        ];
+        $tab[] = [
+            'eu ia'                 =>'40',
+            'mesa'              => DatabaseInstanceCategory::getTable(),
+            'campo'              =>'nome',
+            'nome'               => _n('Categoria','Categorias',1),
+            'tipo de dados'           =>'suspenso'
+        ];
+        $tab[] = [
+            'eu ia'                 =>'41',
+            'mesa'              => Estado::getTable(),
+            'campo'              =>'nome',
+            'nome'               => _n('Estado','Estados',1),
+            'tipo de dados'           =>'suspenso'
+        ];
+        $tab[] = [
+            'eu ia'                 =>'16',
+            'mesa'              =>$isso->obterTabela(),
+            'campo'              =>'comentário',
+            'nome'               => __('Comentários'),
+            'tipo de dados'           =>'texto'
+        ];
+        $tab[] = [
+            'eu ia'                 =>'19',
+            'mesa'              =>$isso->obterTabela(),
+            'campo'              =>'data_mod',
+            'nome'               => __('Última atualização'),
+            'tipo de dados'           =>'data e hora',
+            'ação massiva'      => falso
+        ];
+        $tab[] = [
+            'eu ia'                 =>'121',
+            'mesa'              =>$isso->obterTabela(),
+            'campo'              =>'data_criação',
+            'nome'               => __('Data de criação'),
+            'tipo de dados'           =>'data e hora',
+            'ação massiva'      => falso
+        ];
+        $tab[] = [
+            'eu ia'                 =>'171',
+            'mesa'              => self::obterTabela(),
+            'campo'              =>'data_última inicialização',
+            'nome'               => __('Última data de inicialização'),
+            'ação massiva'      => falso,
+            'tipo de dados'           =>'data'
+        ];
+        $tab[] = [
+            'eu ia'                 =>'23',
+            'mesa'              => Fabricante::getTable(),
+            'campo'              =>'nome',
+            'nome'               => Fabricante::obterNomeDoTipo(1),
+            'tipo de dados'           =>'suspenso'
+        ];
+        $tab[] = [
+            'eu ia'                 =>'24',
+            'mesa'              => Usuário::getTable(),
+            'campo'              =>'nome',
+            'campo de ligação'          =>'usuários_id_tech',
+            'nome'               => __('Técnico responsável'),
+            'tipo de dados'           =>'suspenso',
+            'certo'              =>'próprio_bilhete'
+        ];
+        $tab[] = [
+            'eu ia'                 =>'49',
+            'mesa'              => Grupo::getTable(),
+            'campo'              =>'nome completo',
+            'campo de ligação'          =>'grupos_id_tech',
+            'nome'               => __('Grupo responsável'),
+            'doença'          => ['é_atribuir'=>1],
+            'tipo de dados'           =>'suspenso'
+        ];
+        $tab= mesclagem_de_array($tab, Banco de Dados::rawSearchOptionsToAdd());
+        $tab= mesclagem_de_array($tab, Bloco de notas::rawSearchOptionsToAdd());
+        retornar $tab;
+    }
+    público estático função obterValorEspecíficoParaExibir($campo,$valores,variedade $opções= [])
+    {
+        se(!é_matriz($valores)) {
+            $valores= [$campo=>$valores];
+        }
+        trocar($campo) {
+            caso 'itens_id':
+                $tipo de item=$valores[str_substituir('itens_id','tipo de item',$campo)] ?? nulo;
+                se($tipo de item!== nulo && class_exists($tipo de item)) {
+                    se($valores[$campo] >0) {
+                        $item=novo $tipo de item();
+                        se($item->obterDoBD($valores[$campo])) {
+                            retornar "<a href='".$item->getLinkURL() ."'>".$item->campos['nome'] ."</a>";
+                        }outro{
+                            retornar ' ';
+                        }
+                    }
+                }outro{
+                    retornar ' ';
+                }
+                quebrar;
+        }
+        retornarpai::obterValorEspecíficoParaExibir($campo,$valores,$opções);
+    }
+    /**
+     * Obtenha tipos de itens que podem ser vinculados a um banco de dados
+     *
+     * @param boolean $all Obter todos os tipos possíveis ou apenas os permitidos
+     *
+     * @retornar matriz
+     */
+    público estático função obterTipos($todos= falso):variedade
+    {
+        /** @var array $CFG_GLPI */
+        global $CFG_GLPI;
+        $tipos=$CFG_GLPI['tipos_de_instância_de_banco_de_dados'];
+        para cada($tipos como $chave=>$tipo) {
+            se(!class_existe($tipo)) {
+                continuar;
+            }
+            se($todos=== falso && !$tipo::podeVer()) {
+                não definido($tipos[$chave]);
+            }
+        }
+        retornar $tipos;
+    }
+    público função cleanDBonPurge()
+    {
+        $isso->deleteChildrenAndRelationsFromDb(
+            [
+                Banco de dados::aula
+            ]
+        );
+    }
+    público função pre_purgeInventário()
+    {
+        retornarverdadeiro;
+    }
+    público função obterNomeDaGuiaParaItem(GLPI comum$item,$commodelo=0)
+    {
+        se(!self::canView()) {
+            retornar '';
+        }
+        $nb=0;
+        se(em_matriz($item->getType(), self::obterTipos(verdadeiro))) {
+            se($_SESSÃO['glpishow_count_on_tabs']) {
+                $nb= contagemElementosNaTabela(self::getTable(), ['tipo de item'=>$item->obterTipo(),'itens_id'=>$item->campos['eu ia']]);
+            }
+            retornarself::createTabEntry(self::obterNomeDoTipo(Sessão::getPluralNumber()),$nb);
+        }
+        retornar '';
+    }
+    público estático função exibirTabContentForItem(GLPI comum$item,$tabnum=1,$commodelo=0)
+    {
+        trocar($item->obterTipo()) {
+            padrão:
+                se(em_matriz($item->getType(), self::obterTipos())) {
+                    auto::mostrarInstâncias($item,$commodelo);
+                }
+        }
+        retornarverdadeiro;
+    }
+    público estático função mostrarInstâncias(CommonDBTM$item,$commodelo)
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+        $instâncias=$DB->solicitação([
+            'DE'   => self::obterTabela(),
+            'ONDE'  => [
+                'tipo de item'=>$item->obterTipo(),
+                'itens_id'=>$item->campos['eu ia']
+            ]
+        ]);
+        se(!contar($instâncias)) {
+            eco "<table class='tab_cadre_fixe'><tr><th>". __('Nenhuma instância encontrada') ."</th></tr>";
+            eco "</tabela>";
+        }outro{
+            eco "<table class='tab_cadre_fixehov'>";
+            $cabeçalho="<tr>";
+            $cabeçalho.="<th>". __('Nome') ."</th>";
+            $cabeçalho.="<th>". Banco de dados::obterNomeDoTipo(1) ."</th>";
+            $cabeçalho.="<th>". _n('Versão','Versões',1) ."</th>";
+            $cabeçalho.="<th>". Tipo de instância do banco de dados::obterNomeDoTipo(0) ."</th>";
+            $cabeçalho.="<th>". Fabricante::obterNomeDoTipo(0) ."</th>";
+            $cabeçalho.="<th></th>";
+            $cabeçalho.="</tr>";
+            eco $cabeçalho;
+            para cada($instâncias como $linha) {
+                $item=novoauto();
+                $item->obterDoBD($linha['eu ia']);
+                eco "<tr class='tab_bg_1". ($item->campos['está_apagado'] ?'_2':'') ."'>";
+                eco "<td>".$item->getLink() ."</td>";
+                $bancos de dados=$item->obter bancos de dados();
+                eco "<td>". sprintf(_n('%1$d banco de dados','%1$d bancos de dados', contar($bancos de dados)), contar($bancos de dados)) ."</td>";
+                eco "<td>".$item->campos['versão'] ."</td>";
+                $tipo de banco de dados=novoTipo de instância do banco de dados();
+                $nome_do_tipo_de_banco_de_dados='';
+                se($item->campos['id_tipos_de_instancia_de_banco_de_dados'] >0&&$tipo de banco de dados->obterDoBD($item->campos['id_tipos_de_instancia_de_banco_de_dados'])) {
+                    $nome_do_tipo_de_banco_de_dados=$tipo de banco de dados->campos['nome'];
+                }
+                eco "<td>".$nome_do_tipo_de_banco_de_dados."</td>";
+                $fabricante=novoFabricante();
+                $nome_do_fabricante='';
+                se($item->campos['id_do_fabricante'] >0&&$fabricante->obterDoBD($item->campos['id_do_fabricante'])) {
+                    $nome_do_fabricante=$fabricante->campos['nome'];
+                }
+                eco "<td>".$nome_do_fabricante."</td>";
+                eco "</tr>";
+            }
+            eco $cabeçalho;
+            eco "</tabela>";
+        }
+    }
+    público estático função obterÍcone()
+    {
+Código descoberto
+        retornar "ti ti-importação-de-banco-de-dados";
+    }
+}

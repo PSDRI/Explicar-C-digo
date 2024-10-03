@@ -1,0 +1,50 @@
+
+
+
+Api/APIRest.php - Complexidade ciclomática - 108
+	 - Linhas de código - 694
+	 - bug 1 -  foreach ($_FILES[$filename]['name'] as &$name) {
+Certifique-se de que a variável de valor referenciada não esteja definida após o loop.
+                    $name = $rand_name . $name;
+                }
+            } else {
+
+
+Cache/GereciadorCache.php - Complexidade ciclomática - 70
+	    - Linhas de código - 286
+	    - bug 2 -      {
+        $config_file = $this->config_dir . DIRECTORY_SEPARATOR . self::CONFIG_FILENAME;
+Uncovered code
+        $config = [];
+        if (file_exists($config_file)) {
+            $config  = include($config_file);
+Substitua "include" por "include_once".
+            $contexts = $config['contexts'] ?? [];
+            foreach ($contexts as $context => $context_config) {
+                if (!$this->isContextValid($context, true)) {
+                    trigger_error(sprintf('Invalid or non configurable context: "%s".', $context), E_USER_NOTICE);
+                    unset($config['contexts'][$context]);
+                    continue;
+                }
+                if (
+                    !$this->isContextValid($context, true)
+
+
+glpi/DatabaseInstance.php -Complexidade ciclomática - 43
+	-linhas de código - 628
+	-bug 3 -     public static function displayTabContentForItem(CommonGLPI $item, $tabnum = 1, $withtemplate = 0)
+    {
+        switch ($item->getType()) {
+Remova essa estrutura condicional ou edite seus blocos de código para que eles não sejam todos iguais.
+            default:
+                if (in_array($item->getType(), self::getTypes())) {
+                    self::showInstances($item, $withtemplate);
+                }
+        }
+Uncovered code
+        return true;
+    }
+    public static function showInstances(CommonDBTM $item, $withtemplate)
+
+
+

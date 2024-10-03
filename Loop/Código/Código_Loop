@@ -1,0 +1,627 @@
+Código Linha - 694
+Api/APIRest.php
+Loop
+
+---------------------------
+
+<?php
+/**
+* ------------------------------------------------- --------------------
+*
+* GLPI - Gestionnaire Libre de Parc Informatique
+*
+* http://glpi-project.org
+*
+* @copyright 2015-2024 Teclib' e colaboradores.
+* @copyright 2003-2014 pela Equipe de Desenvolvimento do INDEPNET.
+* @licence https://www.gnu.org/licenses/gpl-3.0.html
+*
+* ------------------------------------------------- --------------------
+*
+* LICENÇA
+*
+* Este arquivo faz parte do GLPI.
+*
+* Este programa é um software livre: você pode redistribuí-lo e/ou modificá-lo
+* sob os termos da Licença Pública Geral GNU conforme publicada por
+* a Free Software Foundation, seja a versão 3 da Licença, ou
+* (a seu critério) qualquer versão posterior.
+*
+* Este programa é distribuído na esperança de que seja útil,
+* mas SEM NENHUMA GARANTIA; sem mesmo a garantia implícita de
+* COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja o
+* GNU General Public License para mais detalhes.
+*
+* Você deve ter recebido uma cópia da GNU General Public License
+* junto com este programa. Se não, veja <https://www.gnu.org/licenses/>.
+*
+* ------------------------------------------------- --------------------
+*/
+/**
+* @desde 9.1
+*/
+espaço de nomesGlpi\Api;
+usarTodos os ativos;
+usarManipulador de upload GLPI;
+usarClasse padrão;
+usarCaixa de ferramentas;
+aula APIRestauração estendeAPI
+{
+    público estático função obterNomeDoTipo($nb=0)
+    {
+        retornar__('API de descanso');
+    }
+    /**
+     * Carregue e valide os arquivos da solicitação e anexe a $this->parameters['input']
+     *
+     * @return vazio
+     */
+    público função gerenciarArquivosCarregados()
+    {
+        para cada(chaves de matriz($_FILES)como $nome do arquivo) {
+           // Randomizar nomes de arquivos
+            $nome_rand= uniqid('', verdadeiro);
+            se(é_matriz($_FILES[$nome do arquivo]['nome'])) {
+                // O nome de entrada foi sufixado por `[]`. Isso resulta em cada propriedade `$_FILES[$filename]` sendo uma matriz.
+                // por exemplo
+                // [
+                // 'nome' => [
+                // 0 => 'imagem.jpg',
+                // 1 => 'documento.pdf',
+                // ],
+                // 'tipo' => [
+                // 0 => 'imagem/jpeg',
+                // 1 => 'aplicação/pdf',
+                // ]
+                // ]
+                para cada($_ARQUIVOS[$nome do arquivo]['nome']como &$nome) {
+                    $nome=$nome_rand.$nome;
+                }
+            }outro{
+                // O nome de entrada NÃO foi sufixado por `[]`. Isso resulta em cada propriedade `$_FILES[$filename]` sendo uma única entrada.
+                // por exemplo
+                // [
+                // 'nome' => 'imagem.jpg',
+                // 'tipo' => 'imagem/jpeg',
+                // ]
+                $nome= &$_ARQUIVOS[$nome do arquivo]['nome'];
+                $nome=$nome_rand.$nome;
+            }
+            $upload_result
+            = GLPIUploadHandler::uploadFiles(['nome'           =>$nome do arquivo,
+                'imprimir_resposta'=> falso
+            ]);
+            para cada($upload_result como $uresult) {
+                 $isso->parâmetros['entrada']->_nomedoarquivo[] =$uresult[0]->nome;
+                 $isso->parâmetros['entrada']->_prefixo_nome_do_arquivo[] =$uresult[0]->prefixo;
+            }
+            $isso->parâmetros['resultado_de_carregamento'][] =$upload_result;
+        }
+    }
+    /**
+     * Analisar url e corpo http para recuperar:
+     * - VERBO HTTP (OBTER/POST/EXCLUIR/COLOCAR)
+     * - Recurso: Ponto final de descanso
+     * - Identificador
+     * - e parâmetros
+     *
+     * E enviar para o método correspondente o recurso identificado
+     *
+     * Em seguida, envie a resposta ao cliente.
+     *
+     * @return vazio
+     */
+    público função chamar()
+    {
+        //analisa a solicitação http e encontra partes
+        $isso->request_uri = $_SERVER['URI_DE_SOLICITAR'];
+        $isso->verbo = $_SERVER['MÉTODO_DE_SOLICITAR'];
+        $caminho_info          = (conjunto($_SERVIDOR['INFO_DO_CAMINHO'])) ? str_substituir("api/","", aparar($_SERVER['INFO_DO_CAMINHO'],'/')) :'';
+        $isso->url_elements = explodir('/',$caminho_info);
+        // recuperar recurso solicitado
+        $recurso      = aparar(strval($isso->elementos_url[0]));
+        $is_inline_doc= (linha($recurso) ==0) || ($recurso=="API");
+        // Adicionar cabeçalhos para CORS
+        $isso->cors();
+        // recuperar parâmetros (no corpo, query_string, cabeçalhos)
+        $isso->analisar parâmetros de entrada($is_inline_doc);
+        // mostrar depuração se necessário
+        se(conjunto($isso->parâmetros['depurar'])) {
+            $isso->depurar =$isso->parâmetros['depurar'];
+            se(vazio($isso->depurar)) {
+                $isso->depurar =1;
+            }
+            se($isso->depurar >=2) {
+                $isso->mostrarDepuração();
+            }
+        }
+        // recuperar sessão (se existir)
+        $isso->recuperarSessão();
+        $isso->initApi();
+        $isso->gerenciarArquivosCarregados();
+        // recuperar parâmetros que permitem a escrita de sessão
+        se(conjunto($isso->parâmetros['sessão_write'])) {
+            $isso->session_write = (bool)$isso->parâmetros['sessão_write'];
+        }
+        // Não desbloqueie a sessão php para recursos que podem lidar com isso
+        se(em_matriz($recurso,$isso->obterRecursosComSessionWrite())) {
+            $isso->session_write = verdadeiro;
+        }
+        // Verificar sessão da API, a menos que esteja na lista negra (sessão init, ...)
+        se(!$is_inline_doc&& !em_matriz($recurso,$isso->obterRecursosPermitidosSemSessão())) {
+            $isso->initEndpoint(verdadeiro,$recurso);
+        }
+        // documentação inline (api/)
+        se($is_inline_doc) {
+            $isso->Documentação em linha("apirest.md");
+        }senão($recurso==="initSessão") {
+            // ## DECLARAR TODOS OS ENDPOINTS ##
+            // faça login no glpi
+            $isso->retornarResposta($isso->initSessão($isso->parâmetros));
+        }senão($recurso==="matarSessão") {
+            // sair do glpi
+            $isso->retornarResposta($isso->killSession());
+        }senão($recurso==="alterarEntidadesAtivas") {
+            // alterar entidades ativas
+            $isso->retornarResposta($isso->changeActiveEntities($isso->parâmetros));
+        }senão($recurso==="obterMinhasEntidades") {
+            // obtém todas as entidades do usuário logado
+            $isso->retornarResposta($isso->obterMinhasEntidades($isso->parâmetros));
+        }senão($recurso==="obterEntidadesAtivas") {
+            // obter entidade ativa atual
+            $isso->retornarResposta($isso->obterEntidadesAtivas());
+        }senão($recurso==="alterarPerfilAtivo") {
+            // alterar perfil ativo
+            $isso->retornarResposta($isso->alterarPerfilAtivo($isso->parâmetros));
+        }senão($recurso==="obterMeusPerfis") {
+            // obter todos os perfis do usuário conectado no momento
+            $isso->retornarResposta($isso->obterMeusPerfis());
+        }senão($recurso==="obterPerfilAtivo") {
+            // obter perfil ativo atual
+            $isso->retornarResposta($isso->obterProfileAtivo());
+        }senão($recurso==="obterSessãoCompleta") {
+            // obter sessão php completa
+            $isso->retornarResposta($isso->getFullSession());
+        }senão($recurso==="obterGlpiConfig") {
+            // obter a variável php completa $CFG_GLPI
+            $isso->retornarResposta($isso->getGlpiConfig());
+        }senão($recurso==="listarOpçõesDePesquisa") {
+            // lista searchOptions de um itemtype
+            $tipo de item=$isso->obterTipoDeItem(1);
+            $isso->retornarResposta($isso->listSearchOptions($tipo de item,$isso->parâmetros));
+        }senão($recurso==="obterváriositens") {
+            // obter vários itens (com vários tipos de itens)
+            $isso->retornarResposta($isso->obterVáriosItens($isso->parâmetros));
+        }senão($recurso==="procurar") {
+            // Pesquisar por itemtype
+            $tipo de item=$isso->obterTipoDeItem(1, verdadeiro, verdadeiro);
+            // limpa stdObjects no parâmetro
+            $params   = json_decode(json_encode($isso->parâmetros), verdadeiro);
+            // procurar
+            $resposta=  $isso->pesquisarItens($tipo de item,$params);
+            // adicionar cabeçalhos de paginação
+            $cabeçalhosadicionais                  = [];
+            $cabeçalhosadicionais["Intervalo de aceitação"] =$tipo de item." ". Caixa de ferramentas::get_max_input_vars();
+            se($resposta['contagem total'] >0) {
+                $cabeçalhosadicionais["Intervalo de conteúdo"] =$resposta['intervalo de conteúdo'];
+            }
+            // diferentes códigos de retorno http para resposta completa ou parcial
+            se($resposta['contar'] >=$resposta['contagem total']) {
+                $código=200;// conteúdo completo
+            }outro{
+                $código=206;// conteúdo parcial
+            }
+            $isso->retornarResposta($resposta,$código,$cabeçalhosadicionais);
+        }senão($recurso==="senha perdida") {
+            se($isso->verbo !='COLOCAR'&&$isso->verbo !='CORREÇÃO') {
+                // proibir redefinição de senha quando o verbo HTTP não for PUT ou PATCH
+                $isso->retornarErro(__("Somente o verbo HTTP PUT é permitido"));
+            }
+            $isso->retornarResposta($isso->senhaperdida($isso->parâmetros));
+        }senão($recurso=='obterAçõesMassivas') {
+            $isso->retornarResposta(
+                $isso->obterAçõesMassivas(
+                    $isso->obterTipoDeItem(1, falso, falso),
+                    $isso->elementos_url[2] ?? nulo,
+                    json_decode(json_codificação($isso->parâmetros), verdadeiro)['está_apagado'] ?? falso,
+                )
+            );
+        }senão($recurso=="obterParâmetrosDeAçãoMassivos") {
+            $isso->retornarResposta(
+                $isso->obterParâmetrosDeAçãoMassiva(
+                    $isso->obterTipoDeItem(1, falso, falso),
+                    $isso->elementos_url[2] ?? nulo,
+                    json_decode(json_codificação($isso->parâmetros), verdadeiro)['está_apagado'] ?? falso,
+                )
+            );
+        }senão($recurso=="aplicarMassiveAction") {
+           // Parâmetros de análise
+            $params= json_decode(json_encode($isso->parâmetros), verdadeiro);
+            $id=$params['id'] ?? [];
+            se(vazio($id)) {
+                $isso->retornarErro("Nenhum ID fornecido",400,"ERRO_AÇÃO_MASSIVA_SEM_IDS");
+            }
+            $isso->aplicarMassiveAction(
+                $isso->obterTipoDeItem(1, falso, falso),
+                $isso->elementos_url[2] ?? nulo,
+                $id,
+                $params['entrada'] ?? []
+            );
+        }senão(preg_match('%usuário/(\d+)/imagem%i',$caminho_info,$corresponde)) {
+            $isso->imagemdousuário($corresponde[1]);
+        }outro{
+            // manipulação commonDBTM
+            $tipo de item          =$isso->obterTipoDeItem(0);
+            $id                =$isso->obterId();
+            $cabeçalhosadicionais= [];
+            $código              =200;
+            trocar($isso->verbo) {
+                padrão:
+                caso "PEGAR":// recuperar item(ns)
+                    se(
+                        $id>0
+                        || ($id!== falso &&$id==0&&$tipo de item=="Entidade")
+                    ) {
+                        $resposta=$isso->obterItem($tipo de item,$id,$isso->parâmetros);
+                        se(conjunto($resposta['data_mod'])) {
+                            $modificação de data= strtotime($resposta['data_mod']);
+                            $cabeçalhosadicionais['Última modificação'] = data_horária("D, d MYH:i:s",$modificação de data) ."GMT";
+                        }
+                    }outro{
+                        // retorna coleção de itens
+                        $contagem total=0;
+                        $resposta=$isso->obterItens($tipo de item,$isso->parâmetros,$contagem total);
+                        //adicionar cabeçalhos de paginação
+                        $intervalo= [0, $_SESSÃO['limite_glpilist']];
+                        se(conjunto($isso->parâmetros['faixa'])) {
+                            $intervalo= explodir("-",$isso->parâmetros['faixa']);
+                        }
+                        // corrigir intervalo final
+                        se($intervalo[1] >$contagem total-1) {
+                            $intervalo[1] =$contagem total-1;
+                        }
+                        // aciona código de retorno de conteúdo parcial
+                        se($intervalo[1] -$intervalo[0] +1<$contagem total) {
+                            $código=206;// conteúdo parcial
+                        }
+                        $cabeçalhosadicionais["Intervalo de aceitação"] =$tipo de item." ". Caixa de ferramentas::get_max_input_vars();
+                        se($contagem total>0) {
+                            $cabeçalhosadicionais["Intervalo de conteúdo"] = implodir('-',$intervalo) ."/".$contagem total;
+                        }
+                    }
+                    quebrar;
+                caso "PUBLICAR":// criar item(ns)
+                    $resposta=$isso->criarItens($tipo de item,$isso->parâmetros);
+                    $código     =201;
+                    se(conjunto($resposta['eu ia'])) {
+                        // adicione um elemento criado de segmentação por local
+                        $cabeçalhosadicionais['localização'] = self::$api_url ."/$tipo de item/".$resposta['eu ia'];
+                    }outro{
+                        // adicione um cabeçalho de link direcionado aos elementos criados
+                        $cabeçalhosadicionais['link'] ="";
+                        para cada($resposta como $item_criado) {
+                            se($item_criado['eu ia']) {
+                                $cabeçalhosadicionais['link'] .= self::$api_url ."/$tipo de item/".
+                                                     $item_criado['eu ia'] .",";
+                            }
+                        }
+                        // remove a última vírgula
+                        $cabeçalhosadicionais['link'] = aparar($cabeçalhosadicionais['link'],",");
+                    }
+                    quebrar;
+                caso "COLOCAR":// atualizar item(ns)
+                caso "CORREÇÃO":// atualizar item(ns)
+                    se(!conjunto($isso->parâmetros['entrada'])) {
+                        $isso->mensagemBadArrayError();
+                    }
+                    // se o id for passado pela string de consulta, adicione-o ao parâmetro de entrada
+                    $entrada= (variedade) ($isso->parâmetros['entrada']);
+                    se(
+                        ($id>0||$id==0&&$tipo de item=="Entidade")
+                        && !conjunto($entrada['eu ia'])
+                    ) {
+                        $isso->parâmetros['entrada']->id =$id;
+                    }
+                    $resposta=$isso->atualizarItens($tipo de item,$isso->parâmetros);
+                    quebrar;
+                caso "EXCLUIR"://apagar item(ns)
+                    // se id for passado pela string de consulta, construa um objeto com ele
+                    se($id!== falso) {
+                        // substituir entrada
+                        $isso->parâmetros['entrada'] =novoClasse padrão();
+                        $isso->parâmetros['entrada']->id =$id;
+                    }
+                    $resposta=$isso->deleteItems($tipo de item,$isso->parâmetros);
+                    quebrar;
+            }
+            $isso->retornarResposta($resposta,$código,$cabeçalhosadicionais);
+        }
+        $isso->mensagemErroPerdido();
+    }
+    /**
+     * Recuperar e verificar itemtype de $this->url_elements
+     *
+     * @param integer $index encontraremos itemtype neste índice de $this->url_elements
+     * (padrão o)
+     * @param boolean $recursive podemos ir mais a fundo ou acionaremos um erro http se não conseguirmos encontrar o itemtype?
+     * (padrão verdadeiro)
+     * @param boolean $all_assets se podemos ter o tipo virtual allasset (padrão false)
+     *
+     * @return booleano
+     */
+    privado função obterTipoDeItem($índice=0,$recursivo= verdadeiro,$todos_os_ativos= falso)
+    {
+        se(conjunto($isso->elementos_url[$índice])) {
+            $todos_os_ativos=$todos_os_ativos&&$isso->elementos_url[$índice] == TodosOsAtivos::getType();
+            $classe_válida= Caixa de ferramentas::isCommonDBTM($isso->elementos_url[$índice])
+            || Caixa de ferramentas::isAPIDeprecated($isso->elementos_url[$índice]);
+            se($todos_os_ativos||$classe_válida) {
+                 $tipo de item=$isso->elementos_url[$índice];
+                se(
+                    $recursivo
+                     && ($tipo_de_item_adicional=$isso->obterTipoDeItem(2, falso))
+                ) {
+                    $isso->parâmetros['tipo_de_item_pai'] =$tipo de item;
+                    $tipo de item                            =$tipo_de_item_adicional;
+                }
+                 // Todos os ativos
+                se($todos_os_ativos) {
+                    retornarTodos os Ativos::getType();
+                }
+               // Carregar namespace para obsoleto
+                $deprecated= Caixa de ferramentas::isAPIDeprecated($tipo de item);
+                se($deprecated) {
+                    $tipo de item="Glpi\Api\Obsoleto\\$tipo de item";
+                }
+               // Obter nome do itemtype com distinção entre maiúsculas e minúsculas
+                $tipo de item= (novo\ClasseReflexão($tipo de item))->getName();
+                se($deprecated) {
+                    // Remover namespace obsoleto
+                    $tipo de item= str_substituir("Glpi\Api\Obsoleto\\","",$tipo de item);
+                }
+                retornar $tipo de item;
+            }
+            $isso->retornarErro(
+                __("recurso não encontrado ou não é uma instância do CommonDBTM"),
+                400,
+                "ERRO_RECURSO_NÃO_ENCONTRADO_NEM_COMMONDBTM"
+            );
+        }outro se($recursivo) {
+            $isso->retornarErro(__("recurso ausente"),400,"ERRO_RECURSOS_FALTANDO");
+        }
+        retornarfalso;
+    }
+    /**
+     * Recuperar em url_element o id atual. Se tivermos um id múltiplo (ex. /Ticket/1/TicketFollwup/2),
+     * sempre encontra o segundo
+     *
+     * @return inteiro|id booleano do itemtype atual (ou falso se não for encontrado)
+     */
+    privado função obterId()
+    {
+        $id            =conjunto($isso->elementos_url[1]) && é_numérico($isso->elementos_url[1])
+                       ? intval($isso->elementos_url[1])
+                       : falso;
+        $id_adicional=conjunto($isso->elementos_url[3]) && é_numérico($isso->elementos_url[3])
+                       ? intval($isso->elementos_url[3])
+                       : falso;
+        se($id_adicional||conjunto($isso->parâmetros['tipo_de_item_pai'])) {
+            $isso->parâmetros['id_pai'] =$id;
+            $id=$id_adicional;
+        }
+        retornar $id;
+    }
+    /**
+     * Construa this->parameters a partir da string de consulta e do corpo http
+     *
+     * @param boolean $is_inline_doc A solicitação atual pede para exibir a documentação inline
+     * Isso removerá o comportamento padrão que define o tipo de conteúdo como application/json
+     *
+     * @return vazio
+     */
+    público função analisar parâmetros de entrada($is_inline_doc= falso)
+    {
+        $parâmetros= [];
+       // primeiro de tudo, puxe as variáveis ​​GET
+        se(conjunto($_SERVIDOR['SEQUÊNCIA_DE_CONSULTA'])) {
+            analisar_str($_SERVIDOR['SEQUÊNCIA_DE_CONSULTA'],$parâmetros);
+        }
+       // agora, como estão os corpos PUT/POST? Eles substituem o que obtivemos de GET
+        $corpo= aparar($isso->getHttpBody());
+        se(estrela($corpo) >0&&$isso->verbo =="PEGAR") {
+           // O método GET requer um corpo vazio
+            $isso->retornarErro(
+                "A solicitação GET não deve ter carga útil json (corpo http)",
+                400,
+                "ERROR_JSON_PAYLOAD_PROIBIDO"
+            );
+        }
+        $tipo_de_conteúdo="";
+        se(conjunto($_SERVIDOR['TIPO_DE_CONTEÚDO'])) {
+            $tipo_de_conteúdo= $_SERVIDOR['TIPO_DE_CONTEÚDO'];
+        }outro se(conjunto($_SERVIDOR['TIPO_DE_CONTEÚDO_HTTP'])) {
+            $tipo_de_conteúdo= $_SERVIDOR['TIPO_DE_CONTEÚDO_HTTP'];
+        }outro{
+            se(!$is_inline_doc) {
+                $tipo_de_conteúdo="aplicação/json";
+            }
+        }
+        se(strpos($tipo_de_conteúdo,"aplicação/json") !== falso) {
+            se($parâmetros_do_corpo= json_decodificar($corpo)) {
+                para cada($parâmetros_do_corpo como $nome_param=>$valor_param) {
+                    $parâmetros[$nome_param] =$valor_param;
+                }
+            }outro se(estrela($corpo) >0) {
+                $isso->retornarErro(
+                    "A carga JSON parece não ser válida",
+                    400,
+                    "ERROR_JSON_PAYLOAD_INVALID",
+                    falso
+                );
+            }
+            $isso->formato ="json";
+        }outro se(strpos($tipo_de_conteúdo,"multipart/form-data") !== falso) {
+            se(contagem($_FILES) <=0) {
+               // provavelmente os arquivos enviados são muito grandes, então $_REQUEST também estará vazio.
+               // veja http://us.php.net/manual/en/ini.core.php#ini.post-max-size
+                $isso->retornarErro(
+                    "O arquivo parece muito grande",
+                    400,
+                    "ERRO_CARREGAR_ARQUIVO_MUITO_GRANDE_POSTA_TAMANHO_MÁXIMO",
+                    falso
+                );
+            }
+           // com este content_type, php://input está vazio... (veja http://php.net/manual/en/wrappers.php.php)
+            se(!$uploadManifest= json_decode($_PEDIDO['enviar manifesto'])) {
+                $isso->retornarErro(
+                    "A carga JSON parece não ser válida",
+                    400,
+                    "ERROR_JSON_PAYLOAD_INVALID",
+                    falso
+                );
+            }
+            para cada($uploadManifest como $campo=>$valor) {
+                $parâmetros[$campo] =$valor;
+            }
+            $isso->formato ="json";
+           // mover arquivos para a pasta _tmp
+            $parâmetros['resultado_de_carregamento'] = [];
+            $parâmetros['entrada']->_nome do arquivo = [];
+            $parâmetros['entrada']->_prefixo_nome_do_arquivo = [];
+        }outro se(strpos($tipo_de_conteúdo,"aplicativo/x-www-form-urlencoded") !== falso) {
+            analisar_str($corpo,$postvars);
+            /** @var array $postvars */
+            para cada($postvars como $campo=>$valor) {
+                // $parameters['input'] precisa ser um objeto ao processar a solicitação da API
+                se($campo==='entrada') {
+                    $valor= (objeto)$valor;
+                }
+                $parâmetros[$campo] =$valor;
+            }
+            $isso->formato ="html";
+        }outro{
+            $isso->formato ="html";
+        }
+       // recuperar cabeçalhos HTTP
+        $cabeçalhos= [];
+        se(função_existe('peguetodososcabeçalhos')) {
+           //específico do apache
+            $cabeçalhos= obter todos os cabeçalhos();
+            se(falso !==$cabeçalhos&&contar($cabeçalhos) >0) {
+                $Cabeçalhosfixos= [];
+                para cada($cabeçalhos como $chave=>$valor) {
+                    $Cabeçalhosfixos[ucwords(strtolower($chave),'-')] =$valor;
+                }
+                $cabeçalhos=$Cabeçalhosfixos;
+            }
+        }outro{
+           // outros servidores
+            para cada($_SERVIDORcomo $chave_do_servidor=>$valor_do_servidor) {
+                se(substr($chave_do_servidor,0,5) =='HTTP_') {
+                    $cabeçalhos[str_substituir(
+                        ' ',
+                        '-',
+                        ucwords(strtolower(str_replace(
+                            '_',
+                            ' ',
+                            substr($chave_do_servidor,5)
+                        )))
+                    )] =$valor_do_servidor;
+                }
+            }
+        }
+       // tenta recuperar autenticação básica
+        se(
+            conjunto($_SERVIDOR['PHP_AUTH_USER'])
+            &&conjunto($_SERVIDOR['PHP_AUTH_PW'])
+        ) {
+            $parâmetros['Conecte-se'] = $_SERVIDOR['PHP_AUTH_USER'];
+            $parâmetros['senha'] = $_SERVIDOR['PHP_AUTH_PW'];
+        }
+       // tenta recuperar user_token no cabeçalho
+        se(
+            conjunto($cabeçalhos['Autorização'])
+            && (strpos($cabeçalhos['Autorização'],'token_do_usuário') !== falso)
+        ) {
+            $autenticação= explodir(' ',$cabeçalhos['Autorização']);
+            se(conjunto($autenticação[1])) {
+                $parâmetros['token_do_usuário'] =$autenticação[1];
+            }
+        }
+       // tenta recuperar session_token no cabeçalho
+        se(conjunto($cabeçalhos['Token de sessão'])) {
+            $parâmetros['token_de_sessão'] =$cabeçalhos['Token de sessão'];
+        }
+       // tenta recuperar app_token no cabeçalho
+        se(conjunto($cabeçalhos['Token de aplicativo'])) {
+            $parâmetros['token_de_aplicativo'] =$cabeçalhos['Token de aplicativo'];
+        }
+       // verificar parâmetros booleanos
+        para cada($parâmetros como $chave=> &$parâmetro) {
+            se($parâmetro==="verdadeiro") {
+                $parâmetro= verdadeiro;
+            }
+            se($parâmetro==="falso") {
+                $parâmetro= falso;
+            }
+        }
+        $isso->parâmetros =$parâmetros;
+        retornar "";
+    }
+    público função retornarResposta($resposta,$códigohttp=200,$cabeçalhosadicionais= [])
+    {
+        se(vazio($códigohttp)) {
+            $códigohttp=200;
+        }
+        para cada($cabeçalhosadicionais como $chave=>$valor) {
+            cabeçalho("$chave:$valor");
+        }
+        http_código_de_resposta($códigohttp);
+        $isso->cabeçalho($isso->depurar);
+        se($resposta!== nulo) {
+            $json= json_encode($resposta, JSON_UNESCAPED_UNICODE
+                                      | JSON_UNESCAPED_SLASHES
+                                      | ($isso->depurar
+                                          ? JSON_IMPRESSÃO_BONITA
+                                          :0));
+        }outro{
+            $json='';
+        }
+        se($isso->depurar) {
+            eco "<pre>";
+            var_dump($resposta);
+            eco "</pre>";
+        }outro{
+            eco $json;
+        }
+        saída;
+    }
+    /**
+     * Exibir a documentação APIRest em HTML (analisada a partir do markdown)
+     *
+     * @param string $file caminho relativo do arquivo de documentação (padrão 'apirest.md')
+     *
+     * @return vazio
+     */
+    público função Documentação em linha($arquivo="apirest.md")
+    {
+        se($isso->formato =="html") {
+            pai::Documentação em linha($arquivo);
+        }outro se($isso->formato =="json") {
+            ecoarquivo_obter_conteúdo(GLPI_ROOT .'/'.$arquivo);
+        }
+        saída;
+    }
+    /**
+     * Leia o valor do cabeçalho X-GLPI-Sanitized-Content (padrão: true)
+     *
+     * @return bool
+     */
+    público função retornarSanitizedContent(): bool
+    {
+        $conteúdo_sanitizado= $_SERVIDOR['HTTP_X_GLPI_SANITIZED_CONTENT'] ?? verdadeiro;
+        retornarfiltro_var($conteúdo_sanitizado, FILTRO_VALIDAR_BOOLEAN);
+    }
+}
+
+

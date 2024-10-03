@@ -1,0 +1,500 @@
+
+Codigo linhas - 565
+Cache/Gerenciador de Cache.php
+
+
+Include
+---------------------------------
+
+<?php
+/**
+* ------------------------------------------------- --------------------
+*
+* GLPI - Gestionnaire Libre de Parc Informatique
+*
+* http://glpi-project.org
+*
+* @copyright 2015-2024 Teclib' e colaboradores.
+* @copyright 2003-2014 pela Equipe de Desenvolvimento do INDEPNET.
+* @licence https://www.gnu.org/licenses/gpl-3.0.html
+*
+* ------------------------------------------------- --------------------
+*
+* LICENÇA
+*
+* Este arquivo faz parte do GLPI.
+*
+* Este programa é um software livre: você pode redistribuí-lo e/ou modificá-lo
+* sob os termos da Licença Pública Geral GNU conforme publicada por
+* a Free Software Foundation, seja a versão 3 da Licença, ou
+* (a seu critério) qualquer versão posterior.
+*
+* Este programa é distribuído na esperança de que seja útil,
+* mas SEM NENHUMA GARANTIA; sem mesmo a garantia implícita de
+* COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja o
+* GNU General Public License para mais detalhes.
+*
+* Você deve ter recebido uma cópia da GNU General Public License
+* junto com este programa. Se não, veja <https://www.gnu.org/licenses/>.
+*
+* ------------------------------------------------- --------------------
+*/
+espaço de nomesGlpi\Cache;
+usarDiretórioIterator;
+usarPsr\Cache\CacheItemPoolInterface;
+usarPsr\SimpleCache\CacheInterface;
+usarSymfony\Componente\Cache\Adaptador\Adaptador de sistema de arquivos;
+usarSymfony\Componente\Cache\Adaptador\MemcachedAdapter;
+usarSymfony\Componente\Cache\Adaptador\RedisAdapter;
+usarSymfony\Componente\Cache\ItemCache;
+usarCaixa de ferramentas;
+aula Gerenciador de Cache
+{
+    /**
+     * Contexto de cache principal do GLPI.
+     * @var sequência
+     */
+    público constante NÚCLEO_DE_CONTEXTO='essencial';
+    /**
+     * Contexto do cache de traduções GLPI.
+     * @var sequência
+     */
+    público constante TRADUÇÕES_DE_CONTEXTO='traduções';
+    /**
+     * Contexto de cache do instalador GLPI.
+     * @var sequência
+     */
+    público constante INSTALADOR_DE_CONTEXTO='instalador';
+    /**
+     * Esquema Memcached.
+     * @var sequência
+     */
+    público constante ESQUEMA_MEMCACHED  ='memcache';
+    /**
+     * Esquema Redis (conexão TCP).
+     * @var sequência
+     */
+    público constante ESQUEMA_REDIS      ='redis';
+    /**
+     * Esquema Redis (conexão TLS).
+     * @var sequência
+     */
+    público constante ESQUEMA_REDISS     ='redispor';
+    /**
+     * Nome do arquivo de configuração do cache principal.
+     * @var sequência
+     */
+    público constante NOME_DO_ARQUIVO_DE_CONFIGURAÇÃO='cache.php';
+    /**
+     * Diretório de configuração.
+     *
+     * @var sequência
+     */
+    privado $config_dir;
+    /**
+     * Diretório de cache.
+     *
+     * @var sequência
+     */
+    privado $cache_dir;
+    público função __construir(corda$config_dir= GLPI_CONFIG_DIR, sequência de caracteres$cache_dir= GLPI_CACHE_DIR)
+    {
+        $isso->diretório_de_configuração=$config_dir;
+        $isso->diretório_cache=$cache_dir;
+    }
+    /**
+     * Define o prefixo do namespace do cache.
+     *
+     * @param string $namespace_prefix
+     *
+     * @return bool
+     */
+    público função setNamespacePrefix(corda$prefixo_do_espaço_de_nome): bool
+    {
+        $configuração=$isso->obterRawConfig();
+        $configuração['prefixo_do_espaço_de_nomes'] =$prefixo_do_espaço_de_nome?: nulo;
+        retornar $isso->escreverConfig($configuração);
+    }
+    /**
+     * Define a configuração de cache para determinado contexto.
+     *
+     * @param string $context
+     * @param string|string[] $dsn
+     * @param array $opções
+     *
+     * @return bool
+     */
+    público função definirConfiguração(corda$context,$dsn,variedade $opções= []): bool
+    {
+        se(!$isso->éContextoVálido($context, verdadeiro)) {
+            lançar novo\InvalidArgumentException(sprintf('Contexto inválido ou não configurável: "%s".',$context));
+        }
+        se(!$isso->éDsnVálido($dsn)) {
+            lançar novo\InvalidArgumentException(sprintf('DSN inválido: %s.', json_encode($dsn, JSON_UNESCAPED_SLASHES)));
+        }
+        $configuração=$isso->obterRawConfig();
+        $configuração['contextos'][$context] = [
+            'dsn'       =>$dsn,
+            'opções'   =>$opções,
+        ];
+        retornar $isso->escreverConfig($configuração);
+    }
+    /**
+     * Desconfigurar configuração de cache para determinado contexto.
+     *
+     * @param string $context
+     *
+     * @return bool
+     */
+    público função unsetConfiguração(corda$context): bool
+    {
+        se(!$isso->éContextoVálido($context, verdadeiro)) {
+            lançar novo\InvalidArgumentException(sprintf('Contexto inválido ou não configurável: "%s".',$context));
+        }
+        $configuração=$isso->obterRawConfig();
+        não definido($configuração['contextos'][$context]);
+        retornar $isso->escreverConfig($configuração);
+    }
+    /**
+     * Teste a conexão com o DSN fornecido. A falha na conexão acionará uma exceção.
+     *
+     * @param string|string[] $dsn
+     * @param array $opções
+     *
+     * @retornar matriz
+     */
+    público função testeConexão($dsn,variedade $opções= []): vazio
+    {
+        trocar($isso->esquema de extração($dsn)) {
+            casoauto::ESQUEMA_MEMCACHED:
+                // Inicie a conexão Memcached para encontrar possíveis erros de conexão.
+                $client= MemcachedAdapter::createConnection($dsn,$opções);
+                $estatísticas=$client->obterEstatísticas();
+                se($estatísticas=== falso) {
+                   // Memcached::getStats() retornará false se o servidor não puder ser alcançado.
+                    lançar novo \Exceção de tempo de execução('Não é possível conectar ao servidor Memcached.');
+                }
+                quebrar;
+            casoauto::ESQUEMA_REDIS:
+            casoauto::ESQUEMA_REDISS:
+               // Inicie a conexão Redis para encontrar possíveis erros de conexão.
+                $opções['preguiçoso'] = falso;//forçar conexão instantânea
+                RedisAdapter::createConnection($dsn,$opções);
+                quebrar;
+            padrão:
+                quebrar;
+        }
+    }
+    /**
+     * Obter instância de cache para o contexto fornecido.
+     *
+     * @param string $context
+     *
+     * @return CacheInterface
+     */
+    público função obterCacheInstance(corda$context): Interface de cache
+    {
+        retornar novoSimpleCache($isso->obterCacheStorageAdapter($context));
+    }
+    /**
+     * Obtenha o adaptador de armazenamento em cache para o contexto fornecido.
+     *
+     * @return\Psr\Cache\CacheItemPoolInterface
+     */
+    público função obterCacheStorageAdapter(corda$context): Interface de CacheItemPool
+    {
+        /** @var \Psr\Log\LoggerInterface $PHPLOGGER */
+        global $PHPLOGGER;
+        se(!$isso->éContextoVálido($context)) {
+            lançar novo\InvalidArgumentException(sprintf('Contexto inválido: "%s".',$context));
+        }
+        $raw_config=$isso->obterRawConfig();
+        $prefixo_do_espaço_de_nome=$raw_config['prefixo_do_espaço_de_nomes'] ??'';
+        se(!vazio($prefixo_do_espaço_de_nome)) {
+            $prefixo_do_espaço_de_nome.='-';
+        }
+        se($context=== eu::TRADUÇÕES_DE_CONTEXTO||$context=== eu::INSTALADOR_DE_CONTEXTO) {
+            // contextos de 'traduções' e 'instalador' não devem ser configurados
+            // e sempre deve usar um adaptador de sistema de arquivos.
+            // Acrescente a versão GLPI ao namespace para garantir que esses caches não contenham dados
+            // de uma versão anterior.
+            $espaço de nomes=$isso->normalizarEspaço de nomes($prefixo_do_espaço_de_nome.$context.'-'. VERSÃO_GLPI);
+            $adaptador=novoAdaptador de sistema de arquivos($espaço de nomes,0,$isso->diretório_cache);
+        }senão(!array_key_existe($context,$raw_config['contextos'])) {
+            // Padrão para sistema de arquivos, dentro de GLPI_CACHE_DIR/$context.
+            $adaptador=novoAdaptador de sistema de arquivos($isso->normalizarEspaço de nomes($prefixo_do_espaço_de_nome.$context),0,$isso->diretório_cache);
+        }outro{
+            $context_config=$raw_config['contextos'][$context];
+            $dsn       =$context_config['dsn'];
+            $opções   =$context_config['opções'] ?? [];
+            $esquema    =$isso->esquema de extração($dsn);
+            $espaço de nomes=$isso->normalizarEspaço de nomes($prefixo_do_espaço_de_nome.  $context);
+            trocar($esquema) {
+                casoauto::ESQUEMA_MEMCACHED:
+                    $adaptador=novoAdaptador Memcached(
+                        MemcachedAdapter::createConnection($dsn,$opções),
+                        $espaço de nomes
+                    );
+                    quebrar;
+                casoauto::ESQUEMA_REDIS:
+                casoauto::ESQUEMA_REDISS:
+                    $adaptador=novoAdaptador Redis(
+                        RedisAdapter::createConnection($dsn,$opções),
+                        $espaço de nomes
+                    );
+                    quebrar;
+                padrão:
+                    lançar novo \Exceção de tempo de execução(corrida de velocidade('DSN de cache %s inválido.', var_export($dsn, verdadeiro)));
+                    quebrar;
+            }
+        }
+        $adaptador->setLogger($PHPLOGGER);
+        retornar $adaptador;
+    }
+    /**
+     * Obter instância de cache principal.
+     *
+     * @return CacheInterface
+     */
+    público função obterInstânciaCoreCache(): Interface de cache
+    {
+        retornar $isso->obterCacheInstance(auto::NÚCLEO_DE_CONTEXTO);
+    }
+    /**
+     * Obter instância de cache de traduções.
+     *
+     * @return CacheInterface
+     */
+    público função obterTranslationsCacheInstance(): Interface de cache
+    {
+        retornar $isso->obterCacheInstance(auto::TRADUÇÕES_DE_CONTEXTO);
+    }
+    /**
+     * Obter instância de cache do instalador.
+     *
+     * @return CacheInterface
+     */
+    público função obterInstaladorCacheInstance(): Interface de cache
+    {
+        retornar $isso->obterCacheInstance(auto::INSTALADOR_DE_CONTEXTO);
+    }
+    /**
+     * Redefinir todos os caches.
+     *
+     * @return bool
+     */
+    público função redefinir todos os caches(): bool
+    {
+        $sucesso= verdadeiro;
+       // Limpar todos os contextos de cache
+        $contextos_conhecidos=$isso->obter contextos conhecidos();
+        para cada($contextos_conhecidos como $context) {
+            $sucesso=$isso->obterCacheInstance($context)->limpar() &&$sucesso;
+        }
+       // Limpar modelos compilados
+        $tpl_cache_dir=$isso->diretório_cache.'/modelos';
+        se(arquivo_existe($tpl_cache_dir)) {
+            $arquivos_tpl= globo($tpl_cache_dir.'/**/*.php');
+            para cada($arquivos_tpl como $arquivo_tpl) {
+                $sucesso= desvincular($arquivo_tpl) &&$sucesso;
+            }
+            $tpl_dirs= globo($tpl_cache_dir.'/*', GLOB_ONLYDIR);
+            para cada($tpl_dirs como $tpl_dir) {
+                $sucesso= rmdir($tpl_dir) &&$sucesso;
+            }
+        }
+        retornar $sucesso;
+    }
+    /**
+     * Retorna a lista de todos os contextos de cache conhecidos.
+     *
+     * @retornar sequência[]
+     */
+    público função obter contextos conhecidos():variedade
+    {
+       // Contextos principais
+        $contextos= [
+            'essencial',
+            'instalador',
+            'traduções',
+        ];
+       // Contextos definidos na configuração.
+       // Eles podem não ser encontrados em diretórios se estiverem configurados para usar um serviço remoto.
+        $configuração=$isso->obterRawConfig();
+        array_push($contextos, ...chaves_de_matriz($configuração['contextos']));
+       // Contexto encontrado nos diretórios de cache.
+       // Eles podem não ser encontrados na configuração se estiverem usando a configuração padrão.
+        $diretório_iterador=novoDiretórioIterator($isso->diretório_cache);
+        para cada($diretório_iterador como $arquivo) {
+            se($arquivo->isDot() || !$arquivo->isDir() || !preg_match('/^plugin_/',$arquivo->getFilename())) {
+                continuar;
+            }
+            $context= preg_replace('/^plugin_([a-zA-Z]+)$/','plugin:$1',$arquivo->getFilename());
+            se($isso->éContextoVálido($context)) {
+                $contextos[] =$context;
+            }
+        }
+        retornarmatriz_única($contextos);
+    }
+    /**
+     * Extrair esquema do DSN.
+     *
+     * @param string|string[] $dsn
+     *
+     * @return string|nulo
+     */
+    público função esquema de extração($dsn): ?corda
+    {
+        se(é_matriz($dsn)) {
+            se(contar($dsn) ===0) {
+                retornarnulo;
+            }
+            $esquemas= [];
+            para cada($dsn como $entrada) {
+                $esquemas[] =$isso->esquema de extração($entrada);
+            }
+            $esquemas= matriz_única($esquemas);
+            se(contar($esquemas) !==1) {
+                retornarnulo;// Esquemas mistos não são permitidos
+            }
+            $esquema= redefinir($esquemas);
+           // Somente o sistema Memcached aceita múltiplos DSNs.
+            retornar $esquema=== eu::ESQUEMA_MEMCACHED?$esquema: nulo;
+        }
+        se(!é_string($dsn)) {
+            retornarnulo;
+        }
+        $corresponde= [];
+        se(preg_match('/^(?<esquema>[az]+):\/\//',$dsn,$corresponde) !==1) {
+            retornarnulo;
+        }
+        $esquema=$corresponde['esquema'];
+        retornarem_matriz($esquema, chaves_de_array($isso->obter adaptadores disponíveis())) ?$esquema: nulo;
+    }
+    /**
+     * Retorna a configuração bruta do arquivo de configuração.
+     *
+     * @retornar matriz
+     */
+    privado função obterRawConfig():variedade
+    {
+        $arquivo_de_configuração=$isso->diretório_de_configuração. SEPARADOR_DE_DIRETÓRIO . self::NOME_DO_ARQUIVO_DE_CONFIGURAÇÃO;
+        $configuração= [];
+        se(arquivo_existe($arquivo_de_configuração)) {
+            $configuração  =incluir($arquivo_de_configuração);
+            $contextos=$configuração['contextos'] ?? [];
+            para cada($contextos como $context=>$context_config) {
+                se(!$isso->éContextoVálido($context, verdadeiro)) {
+                    gatilho_erro(sprintf('Contexto inválido ou não configurável: "%s".',$context), E_USER_NOTICE);
+                    não definido($configuração['contextos'][$context]);
+                    continuar;
+                }
+                se(
+                    !$isso->éContextoVálido($context, verdadeiro)
+                    || !é_matriz($context_config)
+                    || !chave_de_matriz_existe('dsn',$context_config)
+                    || !$isso->éDsnVálido($context_config['dsn'])
+                    || (chave_de_matriz_existe('opções',$context_config) && !é_matriz($context_config['opções']))
+                ) {
+                    gatilho_erro(sprintf('Configuração inválida para contexto de cache "%s".',$context), E_USER_WARNING);
+                    não definido($configuração['contextos'][$context]);
+                    continuar;
+                }
+            }
+        }
+        se(!array_key_existe('contextos',$configuração)) {
+            $configuração['contextos'] = [];
+        }
+        retornar $configuração;
+    }
+    /**
+     * Grave a configuração do cache no disco.
+     *
+     * @param array $config
+     *
+     * @return bool
+     */
+    privado função escreverConfig(variedade $configuração): bool
+    {
+        $config_export= var_export($configuração, verdadeiro);
+        $conteúdo_do_arquivo_de_config= <<<PHP
+<?php
+retornar{$config_export};
+PHP;
+        retornarCaixa de ferramentas::escreverConfig(auto::NOME_DO_ARQUIVO_DE_CONFIGURAÇÃO,$conteúdo_do_arquivo_de_config,$isso->diretório_de_configuração);
+    }
+    /**
+     * Verifique se a chave de contexto é válida.
+     *
+     * @param string $context
+     * @param bool $only_configurable
+     *
+     * @return bool
+     */
+    público função éContextoVálido(corda$context, bool$somente_configurável= falso): bool
+    {
+        $contextos_principais= ['essencial'];
+        se(!$somente_configurável) {
+           // Os armazenamentos de cache 'installer' e 'translations' não podem ser configurados (eles sempre usam o armazenamento do sistema de arquivos)
+            $contextos_principais[] = eu::INSTALADOR_DE_CONTEXTO;
+            $contextos_principais[] = eu::TRADUÇÕES_DE_CONTEXTO;
+        }
+        retornarem_matriz($context,$contextos_principais, verdadeiro) || preg_match('/^plugin:\w+$/',$context) ===1;
+    }
+    /**
+     * Verifique se o DSN é válido.
+     *
+     * @param string|string[] $dsn
+     *
+     * @return bool
+     */
+    público função éDsnVálido($dsn): bool
+    {
+        se(é_matriz($dsn)) {
+            se(contar($dsn) ===0) {
+                retornarfalso;
+            }
+            $esquemas= [];
+            para cada($dsn como $entrada) {
+                $esquemas[] =$isso->esquema de extração($entrada);
+            }
+            $esquemas= matriz_única($esquemas);
+            se(contar($esquemas) !==1) {
+                retornarfalso;// Esquemas mistos não são permitidos
+            }
+           // Somente o sistema Memcached aceita múltiplos DSNs.
+            retornarreiniciar($esquemas) === eu::ESQUEMA_MEMCACHED;
+        }
+        retornarem_matriz($isso->esquema de extração($dsn), chaves_de_array($isso->obter adaptadores disponíveis()));
+    }
+    /**
+     * Normalize o namespace para evitar o uso de caracteres reservados.
+     *
+     * @param string $namespace
+     *
+     * @retornar sequência de caracteres
+     */
+    privado função normalizarEspaço de nomes(corda$espaço de nomes): corda
+    {
+        retornarpreg_replace(
+            '/['. preg_quote(CacheItem::CARACTERES_RESERVADOS,'/') .']/',
+            '_',
+            $espaço de nomes
+        );
+    }
+    /**
+     * Retorna uma lista de adaptadores disponíveis.
+     * Chaves são esquemas adaptadores (veja self::SCHEME_*).
+     * Valores são nomes traduzidos.
+     *
+     * @retornar matriz
+     */
+    público estático função obter adaptadores disponíveis():variedade
+    {
+        retornar[
+            auto::ESQUEMA_MEMCACHED  => __('Memcache'),
+            auto::ESQUEMA_REDIS      => __('Redis (TCP)'),
+            auto::ESQUEMA_REDISS     => __('Redis (TLS)'),
+        ];
+    }
+}
